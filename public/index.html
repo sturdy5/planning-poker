@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Scrum Poker - In-Memory</title>
+    <!-- Bootstrap 5 CSS via CDN -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
+    <style>
+        body { background-color: #f0f2f5; min-height: 100vh; display: flex; align-items: center; }
+    
+        /* Playing Card Styling */
+        .poker-card { 
+            width: 80px; 
+            height: 120px; 
+            cursor: pointer; 
+            transition: all 0.2s ease; 
+            border: 2px solid #dee2e6;
+            border-radius: 10px;
+            position: relative;
+            background: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+
+        .poker-card:hover { 
+            transform: translateY(-8px); 
+            box-shadow: 0 8px 15px rgba(0,0,0,0.1);
+            border-color: #0d6efd;
+        }
+
+        .poker-card.selected { 
+            border-color: #0d6efd; 
+            background-color: #0d6efd; 
+            color: white;
+            transform: translateY(-10px);
+        }
+
+        .card-value { font-size: 1.8rem; font-weight: 800; }
+
+        /* For the hidden player cards */
+        .card-back {
+            background: repeating-linear-gradient(45deg, #0d6efd, #0d6efd 10px, #0b5ed7 10px, #0b5ed7 20px);
+            border: 2px solid white;
+            height: 40px;
+            width: 30px;
+            border-radius: 4px;
+            display: inline-block;
+        }
+
+        .card-container {
+            perspective: 1000px;
+            width: 60px;
+            height: 90px;
+        }
+
+        .card-inner {
+            transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            transform-style: preserve-3d;
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* This class triggers the flip */
+        .card-inner.is-flipped {
+            transform: rotateY(180deg);
+        }
+
+        .card-front, .card-back-side {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            -webkit-backface-visibility: hidden;
+            backface-visibility: hidden;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        /* The side the user sees when revealed */
+        .card-front {
+            background-color: #0d6efd;
+            color: white;
+            font-size: 1.5rem;
+        }
+
+        /* The side the user sees while waiting (The "Back" of the card) */
+        .card-back-side {
+            background: repeating-linear-gradient(45deg, #0d6efd, #0d6efd 10px, #0b5ed7 10px, #0b5ed7 20px);
+            transform: rotateY(180deg);
+            border: 3px solid white;
+            position: relative; /* Essential for absolute positioning of icons */
+            color: rgba(255, 255, 255, 0.8); /* Icon color */
+        }
+
+        /* Corner Icon Styling */
+        .corner-icon {
+            position: absolute;
+            font-size: 0.75rem;
+        }
+
+        .top-left {
+            top: 5px;
+            left: 5px;
+        }
+
+        .bottom-right {
+            bottom: 5px;
+            right: 5px;
+            transform: rotate(180deg); /* Flip the bottom icon like a real card */
+        }
+
+        /* Resetting animation for the deck */
+        @keyframes card-pop {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+        .pop { animation: card-pop 0.3s ease-out; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 1. Login/Join Screen -->
+        <div id="login" class="row justify-content-center">
+            <div class="col-md-5">
+                <div class="card shadow-sm p-4 text-center">
+                    <h2 class="mb-4">Scrum Poker</h2>
+                    <div class="mb-3">
+                        <input type="text" id="user" class="form-control form-control-lg" placeholder="Enter your name">
+                    </div>
+                    <button onclick="join()" class="btn btn-primary btn-lg w-100">Join Session</button>
+                    <p class="text-muted mt-3 small">Share this URL with your team to invite them!</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. Game Session -->
+        <div id="game" style="display:none">
+            <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-3">
+                <h3 id="title" class="text-primary mb-0"></h3>
+                <div class="input-group" style="width: auto;">
+                    <input type="text" id="shareUrl" class="form-control form-control-sm" readonly>
+                    <button class="btn btn-outline-secondary btn-sm" onclick="copyLink()" id="copyBtn">Copy Link</button>
+                </div>
+            </div>
+
+            <!-- Voting Deck -->
+            <div class="row g-3 justify-content-center mb-5" id="deck"></div>
+
+            <!-- Player Status & Controls -->
+            <div class="row">
+                <div class="col-md-8">
+                    <div class="card shadow-sm">
+                        <div class="card-header bg-white font-weight-bold">Participants</div>
+                        <div class="list-group list-group-flush" id="players"></div>
+                    </div>
+                </div>
+                <div class="col-md-4 mt-3 mt-md-0">
+                    <div class="d-grid gap-3">
+                        <button onclick="socket.emit('reveal-votes', currentRoom)" class="btn btn-success btn-lg">Reveal All Cards</button>
+                        <button onclick="reset()" class="btn btn-outline-danger">Reset Round</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        const urlParams = new URLSearchParams(window.location.search);
+        let currentRoom = urlParams.get('room') || Math.random().toString(36).substring(2, 9);
+        let myVote = null;
+
+        if (!urlParams.get('room')) window.history.replaceState({}, '', `?room=${currentRoom}`);
+
+        function join() {
+            const username = document.getElementById('user').value;
+            if(!username) return;
+            document.getElementById('login').style.display = 'none';
+            document.getElementById('game').style.display = 'block';
+            document.getElementById('title').innerText = `Room: ${currentRoom}`;
+            document.getElementById('shareUrl').value = window.location.href;
+            socket.emit('join-room', { roomId: currentRoom, username });
+            renderDeck();
+        }
+
+        function renderDeck() {
+            const points = [1, 2, 3, 5, 8, 13, 21, '?'];
+            const deckContainer = document.getElementById('deck');
+            deckContainer.className = "d-flex flex-wrap justify-content-center gap-3 mb-5";
+            
+            deckContainer.innerHTML = points.map(p => `
+                <div class="poker-card ${myVote == p ? 'selected shadow-lg' : ''}" onclick="vote('${p}')">
+                    <div class="card-value">${p}</div>
+                </div>
+            `).join('');
+        }
+
+        function vote(v) { myVote = v; socket.emit('submit-vote', { roomId: currentRoom, vote: v }); renderDeck(); }
+        function reset() { 
+            myVote = null;
+            // Add a quick animation to the deck
+            const deck = document.getElementById('deck');
+            deck.classList.add('pop');
+            setTimeout(() => deck.classList.remove('pop'), 300);
+            
+            socket.emit('reset-room', currentRoom); 
+            renderDeck();
+        }
+
+        async function copyLink() {
+            await navigator.clipboard.writeText(window.location.href);
+            const btn = document.getElementById('copyBtn');
+            btn.innerText = "Copied!";
+            setTimeout(() => btn.innerText = "Copy Link", 2000);
+        }
+
+        socket.on('room-update', room => {
+            const playerList = document.getElementById('players');
+            
+            Object.entries(room.users).forEach(([id, user]) => {
+                let playerRow = document.getElementById(`player-${id}`);
+                
+                // 1. Create the row if it doesn't exist yet
+                if (!playerRow) {
+                    playerRow = document.createElement('div');
+                    playerRow.id = `player-${id}`;
+                    playerRow.className = "list-group-item d-flex justify-content-between align-items-center p-3";
+                    playerRow.innerHTML = `
+                        <span class="fw-bold fs-5 user-name"></span>
+                        <div class="card-container">
+                            <div class="card-inner is-flipped">
+                                <div class="card-front user-vote"></div>
+                                <div class="card-back-side">
+                                    <!-- Decorative Corners -->
+                                    <i class="bi bi-suit-spade-fill corner-icon top-left"></i>
+                                    <i class="bi bi-suit-spade-fill corner-icon bottom-right"></i>
+                                    
+                                    <!-- Center Logo (Optional) -->
+                                    <i class="bi bi-person-workspace fs-3"></i>
+                                </div>
+                            </div>
+                        </div>`;
+                    playerList.appendChild(playerRow);
+                }
+
+                // 2. Update the name and vote value
+                playerRow.querySelector('.user-name').innerText = user.username;
+                const voteDisplay = playerRow.querySelector('.user-vote');
+                const cardInner = playerRow.querySelector('.card-inner');
+                
+                if (user.vote) {
+                    voteDisplay.innerText = user.vote;
+                    cardInner.style.display = "block"; // Show card if they voted
+                    
+                    // 3. Trigger the Flip: Only remove 'is-flipped' if reveal is true
+                    if (room.showVotes) {
+                        cardInner.classList.remove('is-flipped');
+                    } else {
+                        cardInner.classList.add('is-flipped');
+                    }
+                } else {
+                    cardInner.style.display = "none"; // Hide card if no vote
+                }
+            });
+
+            // 4. Cleanup: Remove players who left the room
+            const currentIds = Object.keys(room.users);
+            [...playerList.children].forEach(row => {
+                const rowId = row.id.replace('player-', '');
+                if (!currentIds.includes(rowId)) row.remove();
+            });
+        });
+    </script>
+</body>
+</html>
