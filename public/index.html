@@ -54,8 +54,8 @@
 
         .card-container {
             perspective: 1000px;
-            width: 60px;
-            height: 90px;
+            width: 40px;
+            height: 60px;
         }
 
         .card-inner {
@@ -235,7 +235,7 @@
                 if (!playerRow) {
                     playerRow = document.createElement('div');
                     playerRow.id = `player-${id}`;
-                    playerRow.className = "list-group-item d-flex justify-content-between align-items-center p-3";
+                    playerRow.className = "list-group-item d-flex justify-content-between align-items-center";
                     playerRow.innerHTML = `
                         <span class="fw-bold fs-5 user-name"></span>
                         <div class="card-container">
@@ -245,9 +245,6 @@
                                     <!-- Decorative Corners -->
                                     <i class="bi bi-suit-spade-fill corner-icon top-left"></i>
                                     <i class="bi bi-suit-spade-fill corner-icon bottom-right"></i>
-                                    
-                                    <!-- Center Logo (Optional) -->
-                                    <i class="bi bi-person-workspace fs-3"></i>
                                 </div>
                             </div>
                         </div>`;
