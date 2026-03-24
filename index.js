@@ -34,7 +34,8 @@ io.on('connection', (socket) => {
     socket.on('reveal-votes', (roomId) => {
         const room = rooms.get(roomId);
         if (room) {
-            room.showVotes = true;
+            let numOfVotes = Object.values(room.users).filter(u => u.vote != null).length;
+            room.showVotes = numOfVotes > 0;
             io.to(roomId).emit('room-update', room);
         }
     });
@@ -43,7 +44,7 @@ io.on('connection', (socket) => {
         const room = rooms.get(roomId);
         if (room) {
             room.showVotes = false;
-            Object.keys(room.users).forEach(id => room.users[id].vote = null);
+            Object.values(room.users).forEach(user => user.vote = null);
             io.to(roomId).emit('room-update', room);
         }
     });
