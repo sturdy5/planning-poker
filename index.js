@@ -13,6 +13,9 @@ const rooms = new Map();
 // Serve all static files (HTML, CSS, JS) from the 'public' folder
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Serve canvas-confetti from node_modules
+app.use('/modules/canvas-confetti', express.static(path.join(__dirname, 'node_modules/canvas-confetti/dist/confetti.browser.js')));
+
 io.on('connection', (socket) => {
     socket.on('join-room', ({ roomId, username }) => {
         socket.join(roomId);
