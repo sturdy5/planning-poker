@@ -32,10 +32,10 @@
             --card-border: #dee2e6;
             --accent: #4f9cff;
             --accent-2: #2e7bff;
-            --text-color: #111827;
-            --card-front-text: #ffffff;
-            --muted: rgba(230,238,249,0.6);
-            --card-shadow: 0 6px 18px rgba(230,238,249,0.6);
+            --text-color: #e0e7ff;
+            --card-front-text: #111827;
+            --muted: rgba(255,255,255,0.2);
+            --card-shadow: 0 6px 18px rgba(255,255,255,0.2);
         }
 
         body { background-color: var(--bg); color: var(--text-color); min-height: 100vh; display: flex; align-items: center; }
@@ -69,7 +69,11 @@
             transform: translateY(-10px);
         }
 
-        .card-value { font-size: 1.8rem; font-weight: 800; }
+        .card-value { 
+            font-size: 1.8rem;
+            font-weight: 800;
+            color: #111827;
+        }
 
         /* For the hidden player cards */
         .card-back {
@@ -291,6 +295,7 @@
                         <button class="btn btn-outline-secondary btn-sm" onclick="copyLink()" id="copyBtn">Copy Link</button>
                     </div>
                     <div class="form-check form-switch ms-2" title="Toggle dark mode">
+                        <span class="form-check-label font-weight-bold">Dark Mode</span>
                         <input class="form-check-input" type="checkbox" id="themeToggle" onchange="toggleTheme()">
                     </div>
                 </div>
@@ -318,6 +323,7 @@
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
+    <script src="/modules/canvas-confetti"></script>
     <script>
         const socket = io();
         const urlParams = new URLSearchParams(window.location.search);
@@ -387,70 +393,6 @@
             setTimeout(() => btn.innerText = "Copy Link", 2000);
         }
 
-        socket.on('room-update', room => {
-            const playerList = document.getElementById('players');
-            
-            Object.entries(room.users).forEach(([id, user]) => {
-                let playerRow = document.getElementById(`player-${id}`);
-                
-                // 1. Create the row if it doesn't exist yet
-                if (!playerRow) {
-                    playerRow = document.createElement('div');
-                    playerRow.id = `player-${id}`;
-                    playerRow.className = "list-group-item d-flex justify-content-between align-items-center";
-                    playerRow.innerHTML = `
-                        <span class="fw-bold fs-5 user-name"></span>
-                        <div class="card-container">
-                            <div class="card-inner is-flipped">
-                                <div class="card-front user-vote"></div>
-                                <div class="card-back-side">
-                                    <!-- Decorative Corners -->
-                                    <i class="bi bi-suit-spade-fill corner-icon top-left"></i>
-                                    <i class="bi bi-suit-spade-fill corner-icon bottom-right"></i>
-                                </div>
-                            </div>
-                        </div>`;
-                    playerList.appendChild(playerRow);
-                }
-
-                // 2. Update the name and vote value
-                playerRow.querySelector('.user-name').innerText = user.username;
-                const voteDisplay = playerRow.querySelector('.user-vote');
-                const cardInner = playerRow.querySelector('.card-inner');
-                
-                if (user.vote) {
-                    voteDisplay.innerText = user.vote;
-                    cardInner.style.display = "block"; // Show card if they voted
-                    
-                    // 3. Trigger the Flip: Only remove 'is-flipped' if reveal is true
-                    if (room.showVotes) {
-                        cardInner.classList.remove('is-flipped');
-                    } else {
-                        cardInner.classList.add('is-flipped');
-                    }
-                } else {
-                    cardInner.style.display = "none"; // Hide card if no vote
-                }
-            });
-
-            // 4. Cleanup: Remove players who left the room
-            const currentIds = Object.keys(room.users);
-            [...playerList.children].forEach(row => {
-                const rowId = row.id.replace('player-', '');
-                if (!currentIds.includes(rowId)) row.remove();
-            });
-
-            // 5. reset the deck animation on room update (like after reset)
-            const anyVotes = Object.values(room.users).some(u => u.vote);
-            if (!anyVotes) {
-                myVote = null;
-                resetVotes();
-                renderDeck();
-            }
-        });
-    </script>
-    <script src="/modules/canvas-confetti"></script>
-    <script>
         function triggerConfetti() {
             const duration = 3 * 1000;
             const animationEnd = Date.now() + duration;
