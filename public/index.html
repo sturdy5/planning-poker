@@ -1,528 +1,1326 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Scrum Poker - In-Memory</title>
-    <!-- Google Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Bangers&display=swap" rel="stylesheet">
-    <!-- Bootstrap 5 CSS via CDN -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
-    <style>
-        /* Theme variables */
-        :root {
-            --bg: #f0f2f5;
-            --card-bg: #ffffff;
-            --card-border: #dee2e6;
-            --accent: #0d6efd;
-            --accent-2: #0b5ed7;
-            --text-color: #111827;
-            --card-front-text: #ffffff;
-            --muted: rgba(0,0,0,0.6);
-            --card-shadow: 0 4px 6px rgba(0,0,0,0.05);
-        }
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Planning Poker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ── Reset & tokens ──────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-        [data-theme="dark"] {
-            --bg: #0b1020;
-            --card-bg: #ffffff;
-            --card-border: #dee2e6;
-            --accent: #4f9cff;
-            --accent-2: #2e7bff;
-            --text-color: #e0e7ff;
-            --card-front-text: #111827;
-            --muted: rgba(255,255,255,0.2);
-            --card-shadow: 0 6px 18px rgba(255,255,255,0.2);
-        }
+:root {
+  --ink:       #0c0c0e;
+  --ink-2:     #18181c;
+  --ink-3:     #222228;
+  --rule:      #2c2c35;
+  --muted:     #55556a;
+  --soft:      #888899;
+  --body:      #c8c8d8;
+  --head:      #ededf5;
+  --amber:     #f0a04b;
+  --amber-dim: #7a4e1e;
+  --green:     #3ecf8e;
+  --green-dim: #0e3d28;
+  --red:       #f06060;
+  --blue:      #60a8f0;
+  --r:         10px;
+  --r-lg:      16px;
+  --shadow:    0 1px 3px rgba(0,0,0,.5), 0 4px 16px rgba(0,0,0,.3);
+}
 
-        body { background-color: var(--bg); color: var(--text-color); min-height: 100vh; display: flex; align-items: center; }
+[data-theme="light"] {
+  --ink:       #f8f8fc;
+  --ink-2:     #f0f0f8;
+  --ink-3:     #e6e6f0;
+  --rule:      #d8d8e8;
+  --muted:     #9090a8;
+  --soft:      #6868808;
+  --body:      #404058;
+  --head:      #18182a;
+  --amber:     #d4821a;
+  --amber-dim: #fdf3e7;
+  --green:     #1a9c64;
+  --green-dim: #e6fbf3;
+  --red:       #d43030;
+  --blue:      #2070c0;
+  --shadow:    0 1px 3px rgba(0,0,0,.08), 0 4px 16px rgba(0,0,0,.06);
+}
 
-        /* Playing Card Styling */
-        .poker-card { 
-            width: 80px; 
-            height: 120px; 
-            cursor: pointer; 
-            transition: all 0.2s ease; 
-            border: 2px solid var(--card-border);
-            border-radius: 10px;
-            position: relative;
-            background: var(--card-bg);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: var(--card-shadow);
-        }
+html { font-size: 15px; }
 
-        .poker-card:hover { 
-            transform: translateY(-8px); 
-            box-shadow: 0 8px 20px rgba(0,0,0,0.12);
-            border-color: var(--accent);
-        }
+body {
+  font-family: 'Geist Mono', monospace;
+  background: var(--ink);
+  color: var(--body);
+  min-height: 100dvh;
+  transition: background .25s, color .25s;
+  -webkit-font-smoothing: antialiased;
+}
 
-        .poker-card.selected { 
-            border-color: var(--accent); 
-            background-color: var(--accent); 
-            color: var(--card-front-text);
-            transform: translateY(-10px);
-        }
+/* ── Utility ──────────────────────────────────────────────────────────── */
+.sr-only { position: absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); }
 
-        .card-value { 
-            font-size: 1.8rem;
-            font-weight: 800;
-            color: #111827;
-        }
+/* ── Lobby ───────────────────────────────────────────────────────────── */
+#lobby {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+}
 
-        /* For the hidden player cards */
-        .card-back {
-            background: repeating-linear-gradient(45deg, var(--accent), var(--accent) 10px, var(--accent-2) 10px, var(--accent-2) 20px);
-            border: 2px solid var(--card-bg);
-            height: 40px;
-            width: 30px;
-            border-radius: 4px;
-            display: inline-block;
-        }
+.lobby-wrap {
+  width: 100%;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  gap: 2.5rem;
+}
 
-        .card-container {
-            perspective: 1000px;
-            width: 40px;
-            height: 60px;
-        }
+.wordmark {
+  display: flex;
+  flex-direction: column;
+  gap: .25rem;
+}
 
-        .card-inner {
-            transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-            transform-style: preserve-3d;
-            position: relative;
-            width: 100%;
-            height: 100%;
-        }
+.wordmark-title {
+  font-family: 'Instrument Serif', serif;
+  font-size: 2.25rem;
+  color: var(--head);
+  letter-spacing: -.02em;
+  line-height: 1;
+}
 
-        /* This class triggers the flip */
-        .card-inner.is-flipped {
-            transform: rotateY(180deg);
-        }
+.wordmark-sub {
+  font-size: .7rem;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
 
-        .card-front, .card-back-side {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            -webkit-backface-visibility: hidden;
-            backface-visibility: hidden;
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-        }
+.lobby-form {
+  display: flex;
+  flex-direction: column;
+  gap: .75rem;
+}
 
-        /* The side the user sees when revealed */
-        .card-front {
-            background-color: var(--accent);
-            color: var(--card-front-text);
-            font-size: 1.5rem;
-        }
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: .375rem;
+}
 
-        /* The side the user sees while waiting (The "Back" of the card) */
-        .card-back-side {
-            background: repeating-linear-gradient(45deg, var(--accent), var(--accent) 10px, var(--accent-2) 10px, var(--accent-2) 20px);
-            transform: rotateY(180deg);
-            border: 3px solid var(--card-bg);
-            position: relative; /* Essential for absolute positioning of icons */
-            color: rgba(255, 255, 255, 0.9); /* Icon color */
-        }
+.field-label {
+  font-size: .65rem;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
 
-        /* Corner Icon Styling */
-        .corner-icon {
-            position: absolute;
-            font-size: 0.75rem;
-        }
+.field-input {
+  background: var(--ink-2);
+  border: 1px solid var(--rule);
+  border-radius: var(--r);
+  padding: .75rem 1rem;
+  font-family: 'Geist Mono', monospace;
+  font-size: .875rem;
+  color: var(--head);
+  outline: none;
+  transition: border-color .15s;
+  width: 100%;
+}
+.field-input::placeholder { color: var(--muted); }
+.field-input:focus { border-color: var(--amber); }
+.field-input.room-input { text-transform: uppercase; letter-spacing: .08em; }
 
-        .top-left {
-            top: 5px;
-            left: 5px;
-        }
+.lobby-actions {
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+}
 
-        .bottom-right {
-            bottom: 5px;
-            right: 5px;
-            transform: rotate(180deg); /* Flip the bottom icon like a real card */
-        }
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .5rem;
+  font-family: 'Geist Mono', monospace;
+  font-size: .8rem;
+  font-weight: 500;
+  letter-spacing: .04em;
+  border-radius: var(--r);
+  padding: .75rem 1.25rem;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all .15s;
+  white-space: nowrap;
+}
+.btn:disabled { opacity: .35; cursor: not-allowed; }
 
-        /* Resetting animation for the deck */
-        @keyframes card-pop {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.1); }
-            100% { transform: scale(1); }
-        }
-        .pop { animation: card-pop 0.3s ease-out; }
+.btn-primary {
+  background: var(--amber);
+  color: #18100a;
+  border-color: var(--amber);
+}
+.btn-primary:not(:disabled):hover { filter: brightness(1.1); transform: translateY(-1px); }
+.btn-primary:not(:disabled):active { transform: none; filter: brightness(.95); }
 
-        #yatzee-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
-            display: none;
-            justify-content: center;
-            align-items: center;
-            z-index: 9999;
-        }
+.btn-ghost {
+  background: transparent;
+  color: var(--soft);
+  border-color: var(--rule);
+}
+.btn-ghost:not(:disabled):hover { border-color: var(--soft); color: var(--head); }
 
-        #yatzee-text {
-            font-size: 10rem;
-            color: white;
-            font-weight: bold;
-            text-shadow: 0 0 20px #fff, 0 0 30px #ff4da6, 0 0 40px #ff4da6, 0 0 50px #ff4da6, 0 0 60px #ff4da6, 0 0 70px #ff4da6, 0 0 80px #ff4da6;
-        }
+.btn-danger {
+  background: transparent;
+  color: var(--soft);
+  border-color: var(--rule);
+}
+.btn-danger:not(:disabled):hover { border-color: var(--red); color: var(--red); }
 
-        #versus-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.7);
-            display: none;
-            justify-content: center;
-            align-items: center;
-            z-index: 9998; /* Below yatzee */
-            color: white;
-            font-family: 'Bangers', cursive;
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
-        }
+.lobby-or {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  color: var(--muted);
+  font-size: .7rem;
+  letter-spacing: .08em;
+}
+.lobby-or::before, .lobby-or::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--rule);
+}
 
-        .versus-container {
-            display: flex;
-            justify-content: space-around;
-            align-items: center;
-            width: 80%;
-            text-align: center;
-            transform: skew(-5deg);
-        }
+/* ── App shell ───────────────────────────────────────────────────────── */
+#app {
+  display: none;
+  min-height: 100dvh;
+  flex-direction: column;
+}
 
-        .versus-team {
-            width: 40%;
-            padding: 2rem;
-            border: 5px solid;
-            border-radius: 15px;
-        }
+/* ── Top bar ─────────────────────────────────────────────────────────── */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: var(--ink);
+  border-bottom: 1px solid var(--rule);
+  padding: 0 1.5rem;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
 
-        #low-voters {
-            border-color: #ffc107;
-            transform: rotate(-5deg);
-        }
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
 
-        #high-voters {
-            border-color: #17a2b8;
-            transform: rotate(5deg);
-        }
+.topbar-logo {
+  font-family: 'Instrument Serif', serif;
+  font-size: 1.15rem;
+  color: var(--head);
+  letter-spacing: -.01em;
+}
 
-        .versus-vote {
-            font-size: 8rem;
-            font-weight: bold;
-            text-shadow: 4px 4px 0px #000;
-            line-height: 1;
-        }
+.room-pill {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  background: var(--ink-2);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  padding: .3rem .75rem;
+  font-size: .7rem;
+  letter-spacing: .06em;
+  cursor: pointer;
+  transition: border-color .15s, color .15s;
+  color: var(--soft);
+}
+.room-pill:hover { border-color: var(--amber); color: var(--head); }
+.room-pill .room-code { color: var(--amber); font-weight: 600; }
 
-        #low-voters .versus-vote {
-            color: #ffc107;
-        }
+.live-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 0 2px rgba(62,207,142,.2);
+  animation: pulse 2s ease infinite;
+  flex-shrink: 0;
+}
+@keyframes pulse {
+  0%,100% { box-shadow: 0 0 0 2px rgba(62,207,142,.2); }
+  50%      { box-shadow: 0 0 0 5px rgba(62,207,142,.0); }
+}
 
-        #high-voters .versus-vote {
-            color: #17a2b8;
-        }
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+}
 
-        .versus-players {
-            margin-top: 1rem;
-            font-size: 2rem;
-            letter-spacing: 2px;
-            text-shadow: 2px 2px 0px #000;
-        }
+/* Theme switch */
+.theme-switch {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  cursor: pointer;
+  user-select: none;
+}
+.theme-switch-track {
+  width: 36px; height: 20px;
+  background: var(--ink-3);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  position: relative;
+  transition: background .2s;
+}
+.theme-switch-track::after {
+  content: '';
+  position: absolute;
+  top: 2px; left: 2px;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: transform .2s, background .2s;
+}
+[data-theme="light"] .theme-switch-track { background: var(--amber-dim); border-color: var(--amber); }
+[data-theme="light"] .theme-switch-track::after { transform: translateX(16px); background: var(--amber); }
+.theme-switch-label { font-size: .65rem; letter-spacing: .08em; color: var(--muted); text-transform: uppercase; }
 
-        .versus-separator {
-            font-size: 10rem;
-            font-weight: bold;
-            color: #dc3545; /* Red color */
-            text-shadow: 5px 5px 0px #000;
-            transform: skew(-10deg) rotate(-10deg);
-        }
-    </style>
+/* ── Main layout ─────────────────────────────────────────────────────── */
+.app-body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: 0;
+  max-width: 1100px;
+  margin: 0 auto;
+  width: 100%;
+  padding: 2rem 1.5rem;
+  gap: 2rem;
+  align-items: start;
+}
+
+@media (max-width: 780px) {
+  .app-body { grid-template-columns: 1fr; }
+  .sidebar { order: -1; }
+}
+
+/* ── Sidebar ─────────────────────────────────────────────────────────── */
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.panel {
+  background: var(--ink-2);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+
+.panel-head {
+  padding: .75rem 1rem;
+  border-bottom: 1px solid var(--rule);
+  font-size: .65rem;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.panel-body { padding: .75rem; }
+
+/* Players */
+.player-list {
+  display: flex;
+  flex-direction: column;
+  gap: .375rem;
+}
+
+.player-row {
+  display: flex;
+  align-items: center;
+  gap: .625rem;
+  padding: .5rem .625rem;
+  border-radius: 8px;
+  transition: background .15s;
+  animation: rowIn .25s ease;
+}
+@keyframes rowIn {
+  from { opacity: 0; transform: translateX(-6px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+.player-avatar {
+  width: 26px; height: 26px;
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: .65rem;
+  font-weight: 600;
+  color: #fff;
+  flex-shrink: 0;
+  letter-spacing: 0;
+}
+
+.player-name {
+  flex: 1;
+  font-size: .8rem;
+  color: var(--body);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.player-name .you-tag {
+  color: var(--muted);
+  font-size: .65rem;
+  margin-left: .3rem;
+}
+
+.player-status {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.status-pending { color: var(--rule); }
+.status-voted   { color: var(--amber); }
+.status-val     {
+  font-family: 'Instrument Serif', serif;
+  font-size: 1rem;
+  color: var(--green);
+  line-height: 1;
+}
+
+/* Activity log */
+.log-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  max-height: 200px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--rule) transparent;
+}
+
+.log-item {
+  display: flex;
+  gap: .625rem;
+  padding: .375rem .25rem;
+  border-bottom: 1px solid var(--rule);
+  animation: logIn .2s ease;
+}
+.log-item:last-child { border-bottom: none; }
+@keyframes logIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.log-time {
+  font-size: .65rem;
+  color: var(--muted);
+  flex-shrink: 0;
+  padding-top: .05rem;
+  font-variant-numeric: tabular-nums;
+}
+.log-text { font-size: .72rem; color: var(--soft); line-height: 1.5; }
+.log-text b { color: var(--body); font-weight: 500; }
+.log-text .log-accent { color: var(--amber); }
+.log-text .log-green  { color: var(--green); }
+.log-text .log-red    { color: var(--red); }
+
+/* ── Main column ─────────────────────────────────────────────────────── */
+.main-col {
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+}
+
+/* Result banners */
+.result-banner {
+  border-radius: var(--r-lg);
+  border: 1px solid var(--rule);
+  padding: 1.25rem 1.5rem;
+  display: none;
+  animation: bannerIn .35s cubic-bezier(.22,.68,0,1.2);
+}
+@keyframes bannerIn {
+  from { opacity: 0; transform: translateY(-8px) scale(.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Winner banner */
+#banner-win {
+  background: var(--green-dim);
+  border-color: color-mix(in srgb, var(--green) 30%, transparent);
+  align-items: center;
+  gap: 1.5rem;
+}
+[data-theme="light"] #banner-win { background: var(--green-dim); }
+
+.win-number {
+  font-family: 'Instrument Serif', serif;
+  font-size: 4rem;
+  color: var(--green);
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.win-meta { display: flex; flex-direction: column; gap: .3rem; }
+.win-label {
+  font-size: .65rem;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--green);
+  opacity: .7;
+}
+.win-detail { font-size: .8rem; color: var(--soft); }
+.win-detail b { color: var(--body); font-weight: 500; }
+
+/* Discussion banner */
+#banner-discuss {
+  background: color-mix(in srgb, var(--red) 6%, var(--ink-2));
+  border-color: color-mix(in srgb, var(--red) 25%, transparent);
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.discuss-header {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  font-size: .7rem;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--red);
+}
+
+.discuss-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.outlier-group { display: flex; align-items: center; gap: .625rem; }
+
+.outlier-tag {
+  font-size: .6rem;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  padding: .2rem .55rem;
+  border-radius: 6px;
+  font-weight: 600;
+}
+.outlier-tag.low  { background: color-mix(in srgb, var(--blue) 15%, transparent); color: var(--blue); }
+.outlier-tag.high { background: color-mix(in srgb, var(--red)  15%, transparent); color: var(--red); }
+
+.outlier-chips { display: flex; gap: .4rem; flex-wrap: wrap; }
+
+.ochip {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  background: var(--ink-3);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: .3rem .65rem;
+  font-size: .75rem;
+}
+.ochip-val {
+  font-family: 'Instrument Serif', serif;
+  font-size: .95rem;
+  line-height: 1;
+}
+.ochip.low  .ochip-val { color: var(--blue); }
+.ochip.high .ochip-val { color: var(--red); }
+
+.discuss-arrow { color: var(--muted); font-size: .9rem; }
+
+/* ── Vote section ────────────────────────────────────────────────────── */
+.vote-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.section-label {
+  font-size: .65rem;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.vote-count-label {
+  font-size: .7rem;
+  color: var(--muted);
+}
+.vote-count-label span { color: var(--amber); }
+
+/* Cards grid */
+.cards-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .625rem;
+}
+
+/* ── The card ────────────────────────────────────────────────────────── */
+.card-wrap {
+  perspective: 600px;
+}
+
+.card {
+  width: 68px;
+  height: 96px;
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform .08s ease, box-shadow .08s ease;
+  cursor: pointer;
+  border-radius: var(--r);
+}
+
+.card-face {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  border: 1.5px solid var(--rule);
+}
+
+.card-front {
+  background: var(--ink-2);
+  font-family: 'Instrument Serif', serif;
+  font-size: 1.6rem;
+  color: var(--head);
+  transition: background .15s, border-color .15s;
+}
+
+.card-back {
+  background: var(--ink-3);
+  transform: rotateY(180deg);
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 4px,
+    rgba(255,255,255,.015) 4px,
+    rgba(255,255,255,.015) 8px
+  );
+}
+
+/* hover */
+.card:hover .card-front {
+  background: var(--ink-3);
+  border-color: var(--amber);
+}
+.card:hover { transform: translateY(-6px); box-shadow: 0 12px 32px rgba(0,0,0,.4); }
+
+/* selected */
+.card.selected .card-front {
+  background: color-mix(in srgb, var(--amber) 12%, var(--ink-2));
+  border-color: var(--amber);
+  color: var(--amber);
+}
+.card.selected { transform: translateY(-10px); box-shadow: 0 16px 40px rgba(240,160,75,.1); }
+
+/* ── Actions bar ─────────────────────────────────────────────────────── */
+.actions-bar {
+  display: flex;
+  gap: .625rem;
+  flex-wrap: wrap;
+}
+
+/* ── Toasts ──────────────────────────────────────────────────────────── */
+#toasts {
+  position: fixed;
+  bottom: 1.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: .4rem;
+  align-items: center;
+  z-index: 999;
+  pointer-events: none;
+}
+
+.toast {
+  background: var(--head);
+  color: var(--ink);
+  border-radius: 8px;
+  padding: .55rem 1rem;
+  font-size: .75rem;
+  font-weight: 500;
+  white-space: nowrap;
+  box-shadow: var(--shadow);
+  animation: tIn .2s ease, tOut .2s ease 2.6s forwards;
+}
+@keyframes tIn  { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+@keyframes tOut { to   { opacity:0; transform:translateY(-4px); } }
+
+/* ── Player flash (post-reveal vote change) ───────────────────────────── */
+@keyframes playerFlash {
+  0%   { background: transparent; transform: translateX(0); }
+  15%  { background: color-mix(in srgb, var(--amber) 18%, transparent); transform: translateX(-4px); }
+  30%  { background: color-mix(in srgb, var(--amber) 12%, transparent); transform: translateX(3px); }
+  50%  { background: color-mix(in srgb, var(--amber) 10%, transparent); transform: translateX(-2px); }
+  70%  { background: color-mix(in srgb, var(--amber) 6%, transparent);  transform: translateX(1px); }
+  100% { background: transparent; transform: translateX(0); }
+}
+
+.player-row.flashing {
+  animation: playerFlash .55s ease forwards;
+}
+
+.edited-badge {
+  font-size: .58rem;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--amber);
+  border: 1px solid color-mix(in srgb, var(--amber) 40%, transparent);
+  border-radius: 4px;
+  padding: .1rem .35rem;
+  animation: badgeFade 2s ease forwards;
+  flex-shrink: 0;
+}
+@keyframes badgeFade {
+  0%   { opacity: 1; }
+  60%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* ── Confetti ─────────────────────────────────────────────────────────── */
+#confetti-canvas {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 1;
+}
+@media (max-width: 520px) {
+  .card { width: 58px; height: 82px; }
+  .card-front { font-size: 1.3rem; }
+  .topbar { padding: 0 1rem; }
+  .app-body { padding: 1rem; }
+}
+</style>
 </head>
 <body>
-    <div id="versus-overlay">
-        <div class="versus-container">
-            <div class="versus-team" id="low-voters">
-                <div class="versus-vote" id="low-vote-value"></div>
-                <div class="versus-players" id="low-player-list"></div>
-            </div>
-            <div class="versus-separator">VS</div>
-            <div class="versus-team" id="high-voters">
-                <div class="versus-vote" id="high-vote-value"></div>
-                <div class="versus-players" id="high-player-list"></div>
-            </div>
-        </div>
-    </div>
-    <div id="yatzee-overlay">
-        <div id="yatzee-text">Yatzee!</div>
-    </div>
-    <div class="container">
-        <!-- 1. Login/Join Screen -->
-        <div id="login" class="row justify-content-center">
-            <div class="col-md-5">
-                <div class="card shadow-sm p-4 text-center">
-                    <h2 class="mb-4">Scrum Poker</h2>
-                    <div class="mb-3">
-                        <input type="text" id="user" class="form-control form-control-lg" placeholder="Enter your name">
-                    </div>
-                    <button onclick="join()" class="btn btn-primary btn-lg w-100">Join Session</button>
-                    <p class="text-muted mt-3 small">Share this URL with your team to invite them!</p>
-                </div>
-            </div>
-        </div>
 
-        <!-- 2. Game Session -->
-        <div id="game" style="display:none">
-            <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-3">
-                <h3 id="title" class="text-primary mb-0"></h3>
-                <div class="d-flex align-items-center" style="gap: .5rem;">
-                    <div class="input-group" style="width: auto;">
-                        <input type="text" id="shareUrl" class="form-control form-control-sm" readonly>
-                        <button class="btn btn-outline-secondary btn-sm" onclick="copyLink()" id="copyBtn">Copy Link</button>
-                    </div>
-                    <div class="form-check form-switch ms-2" title="Toggle dark mode">
-                        <span class="form-check-label font-weight-bold">Dark Mode</span>
-                        <input class="form-check-input" type="checkbox" id="themeToggle" onchange="toggleTheme()">
-                    </div>
-                </div>
-            </div>
-
-            <!-- Voting Deck -->
-            <div class="row g-3 justify-content-center mb-5" id="deck"></div>
-
-            <!-- Player Status & Controls -->
-            <div class="row">
-                <div class="col-md-8">
-                    <div class="card shadow-sm">
-                        <div class="card-header bg-white font-weight-bold">Participants</div>
-                        <div class="list-group list-group-flush" id="players"></div>
-                    </div>
-                </div>
-                <div class="col-md-4 mt-3 mt-md-0">
-                    <div class="d-grid gap-3">
-                        <button onclick="socket.emit('reveal-votes', currentRoom)" class="btn btn-success btn-lg">Reveal All Cards</button>
-                        <button onclick="reset()" class="btn btn-outline-danger">Reset Round</button>
-                    </div>
-                </div>
-            </div>
-        </div>
+<!-- ── LOBBY ──────────────────────────────────────────────────────────────── -->
+<div id="lobby">
+  <div class="lobby-wrap">
+    <div class="wordmark">
+      <div class="wordmark-title">Planning Poker</div>
     </div>
 
-    <script src="/socket.io/socket.io.js"></script>
-    <script src="/modules/canvas-confetti"></script>
-    <script>
-        const socket = io();
-        const urlParams = new URLSearchParams(window.location.search);
-        let currentRoom = urlParams.get('room') || Math.random().toString(36).substring(2, 9);
-        let myVote = null;
+    <div class="lobby-form">
+      <div class="field">
+        <label class="field-label" for="inp-name">Nickname</label>
+        <input id="inp-name" class="field-input" type="text" placeholder="e.g. whatamidoinghere" maxlength="24" autocomplete="off"/>
+      </div>
 
-        function applyTheme(theme) {
-            document.documentElement.setAttribute('data-theme', theme);
-            const toggle = document.getElementById('themeToggle');
-            toggle.checked = (theme === 'dark');
-        }
+      <div class="field">
+        <label class="field-label" for="inp-room">
+          Room code <span style="color:var(--muted);font-size:.6rem;letter-spacing:.04em;text-transform:none">— leave blank to create</span>
+        </label>
+        <input id="inp-room" class="field-input room-input" type="text" placeholder="e.g. OCP123" maxlength="16" autocomplete="off"/>
+      </div>
+    </div>
 
-        function toggleTheme() {
-            const current = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
-            applyTheme(current === 'dark' ? 'light' : 'dark');
-        }
+    <div class="lobby-actions">
+      <button class="btn btn-primary" onclick="joinRoom()">
+        Enter room
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12,5 19,12 12,19"/></svg>
+      </button>
+    </div>
+  </div>
+</div>
 
-        function initTheme() {
-            const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-            const theme = (prefersDark ? 'dark' : 'light');
-            applyTheme(theme);
-        }
+<!-- ── APP ────────────────────────────────────────────────────────────────── -->
+<div id="app">
 
-        if (!urlParams.get('room')) window.history.replaceState({}, '', `?room=${currentRoom}`);
-        initTheme();
+  <header class="topbar">
+    <div class="topbar-left">
+      <div class="topbar-logo">Planning Poker</div>
+      <div class="room-pill" onclick="copyRoom()" title="Click to copy">
+        <div class="live-dot"></div>
+        <span>Room&nbsp;</span><span class="room-code" id="disp-room">—</span>
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <div class="theme-switch" onclick="toggleTheme()" title="Toggle theme">
+        <div class="theme-switch-track"></div>
+        <span class="theme-switch-label" id="theme-lbl">Dark</span>
+      </div>
+    </div>
+  </header>
 
-        function join() {
-            const username = document.getElementById('user').value;
-            if(!username) return;
-            document.getElementById('login').style.display = 'none';
-            document.getElementById('game').style.display = 'block';
-            document.getElementById('title').innerText = `Room: ${currentRoom}`;
-            document.getElementById('shareUrl').value = window.location.href;
-            socket.emit('join-room', { roomId: currentRoom, username });
-            renderDeck();
-        }
+  <div class="app-body">
 
-        function renderDeck() {
-            const points = [1, 2, 3, 5, 8, 13, 21, '?'];
-            const deckContainer = document.getElementById('deck');
-            deckContainer.className = "d-flex flex-wrap justify-content-center gap-3 mb-5";
-            
-            deckContainer.innerHTML = points.map(p => `
-                <div class="poker-card ${myVote == p ? 'selected shadow-lg' : ''}" onclick="vote('${p}')">
-                    <div class="card-value">${p}</div>
-                </div>
-            `).join('');
-        }
+    <!-- Main column -->
+    <div class="main-col">
 
-        function vote(v) { myVote = v; socket.emit('submit-vote', { roomId: currentRoom, vote: v }); renderDeck(); }
-        function reset() { 
-            myVote = null;
-            socket.emit('reset-room', currentRoom);
-        }
+      <!-- Result banners -->
+      <div id="banner-win" class="result-banner" style="display:none">
+        <div class="win-number" id="win-num">—</div>
+        <div class="win-meta">
+          <div class="win-label">Points awarded</div>
+          <div class="win-detail" id="win-detail"></div>
+        </div>
+      </div>
 
-        function resetVotes(){
-            // Add a quick animation to the deck
-            const deck = document.getElementById('deck');
-            deck.classList.add('pop');
-            setTimeout(() => deck.classList.remove('pop'), 300);
-        }
+      <div id="banner-discuss" class="result-banner" style="display:none">
+        <div class="discuss-header">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          Needs discussion
+        </div>
+        <div class="discuss-row">
+          <div class="outlier-group" id="og-low">
+            <span class="outlier-tag low">Low</span>
+            <div class="outlier-chips" id="oc-low"></div>
+          </div>
+          <span class="discuss-arrow" id="discuss-arrow">↔</span>
+          <div class="outlier-group" id="og-high">
+            <span class="outlier-tag high">High</span>
+            <div class="outlier-chips" id="oc-high"></div>
+          </div>
+        </div>
+      </div>
 
-        async function copyLink() {
-            await navigator.clipboard.writeText(window.location.href);
-            const btn = document.getElementById('copyBtn');
-            btn.innerText = "Copied!";
-            setTimeout(() => btn.innerText = "Copy Link", 2000);
-        }
+      <!-- Cards -->
+      <section>
+        <div class="vote-section-head">
+          <span class="section-label">Your estimate</span>
+          <span class="vote-count-label" id="vote-count-lbl"></span>
+        </div>
+        <div class="cards-grid" id="cards-grid"></div>
+      </section>
 
-        function triggerConfetti() {
-            const duration = 3 * 1000;
-            const animationEnd = Date.now() + duration;
-            const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 0 };
+      <!-- Actions -->
+      <div class="actions-bar">
+        <button class="btn btn-primary" id="btn-reveal" onclick="reveal()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          Reveal cards
+        </button>
+        <button class="btn btn-ghost" onclick="newRound()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1,4 1,10 7,10"/><path d="M3.51 15a9 9 0 1 0 .49-3.17"/></svg>
+          New round
+        </button>
+      </div>
 
-            function randomInRange(min, max) {
-                return Math.random() * (max - min) + min;
-            }
+    </div><!-- /main-col -->
 
-            const interval = setInterval(function() {
-                const timeLeft = animationEnd - Date.now();
+    <!-- Sidebar -->
+    <aside class="sidebar">
 
-                if (timeLeft <= 0) {
-                    return clearInterval(interval);
-                }
+      <div class="panel">
+        <div class="panel-head">
+          <span>Participants</span>
+          <span id="pc-label" style="color:var(--amber)">0</span>
+        </div>
+        <div class="panel-body">
+          <div class="player-list" id="player-list"></div>
+        </div>
+      </div>
 
-                const particleCount = 50 * (timeLeft / duration);
-                // since particles fall down, start a bit higher than random
-                confetti(Object.assign({}, defaults, { particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } }));
-                confetti(Object.assign({}, defaults, { particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } }));
-            }, 250);
-        }
+      <div class="panel">
+        <div class="panel-head">Activity</div>
+        <div class="panel-body" style="padding:.5rem .75rem">
+          <div class="log-list" id="log-list">
+            <div class="log-item">
+              <span class="log-time">—</span>
+              <span class="log-text">Waiting for activity…</span>
+            </div>
+          </div>
+        </div>
+      </div>
 
-        socket.on('room-update', room => {
-            const playerList = document.getElementById('players');
-            
-            Object.entries(room.users).forEach(([id, user]) => {
-                let playerRow = document.getElementById(`player-${id}`);
-                
-                // 1. Create the row if it doesn't exist yet
-                if (!playerRow) {
-                    playerRow = document.createElement('div');
-                    playerRow.id = `player-${id}`;
-                    playerRow.className = "list-group-item d-flex justify-content-between align-items-center";
-                    playerRow.innerHTML = `
-                        <span class="fw-bold fs-5 user-name"></span>
-                        <div class="card-container">
-                            <div class="card-inner is-flipped">
-                                <div class="card-front user-vote"></div>
-                                <div class="card-back-side">
-                                    <!-- Decorative Corners -->
-                                    <i class="bi bi-suit-spade-fill corner-icon top-left"></i>
-                                    <i class="bi bi-suit-spade-fill corner-icon bottom-right"></i>
-                                </div>
-                            </div>
-                        </div>`;
-                    playerList.appendChild(playerRow);
-                }
+    </aside>
 
-                // 2. Update the name and vote value
-                playerRow.querySelector('.user-name').innerText = user.username;
-                const voteDisplay = playerRow.querySelector('.user-vote');
-                const cardInner = playerRow.querySelector('.card-inner');
-                
-                if (user.vote) {
-                    voteDisplay.innerText = user.vote;
-                    cardInner.style.display = "block"; // Show card if they voted
-                    
-                    // 3. Trigger the Flip: Only remove 'is-flipped' if reveal is true
-                    if (room.showVotes) {
-                        cardInner.classList.remove('is-flipped');
-                    } else {
-                        cardInner.classList.add('is-flipped');
-                    }
-                } else {
-                    cardInner.style.display = "none"; // Hide card if no vote
-                }
-            });
+  </div><!-- /app-body -->
+</div><!-- /app -->
 
-            // 4. Cleanup: Remove players who left the room
-            const currentIds = Object.keys(room.users);
-            [...playerList.children].forEach(row => {
-                const rowId = row.id.replace('player-', '');
-                if (!currentIds.includes(rowId)) row.remove();
-            });
+<canvas id="confetti-canvas"></canvas>
 
-            // 5. reset the deck animation on room update (like after reset)
-            const anyVotes = Object.values(room.users).some(u => u.vote);
-            if (!anyVotes) {
-                myVote = null;
-                resetVotes();
-                renderDeck();
-            }
+<div id="toasts"></div>
 
-            // 6. Check for Yatzee
-            if (room.showVotes) {
-                const votes = Object.values(room.users).map(u => u.vote).filter(v => v !== null);
-                const allVotesAreTheSame = votes.length > 1 && votes.every(v => v === votes[0]);
-                if (allVotesAreTheSame) {
-                    const yatzeeOverlay = document.getElementById('yatzee-overlay');
-                    yatzeeOverlay.style.display = 'flex';
-                    triggerConfetti();
-                    setTimeout(() => {
-                        yatzeeOverlay.style.display = 'none';
-                    }, 4000);
-                } else {
-                    // 7. Check for large discrepancies
-                    const numericVotes = Object.values(room.users)
-                        .map(u => u.vote)
-                        .filter(v => v !== null && v !== '?')
-                        .map(v => parseInt(v));
+<script>
+// ── Constants ───────────────────────────────────────────────────────────────
+const FIB       = [1, 2, 3, 5, 8, 13, 21, '?'];
+const FIB_NUM   = [1, 2, 3, 5, 8, 13, 21];
+const COLORS    = ['#f0a04b','#3ecf8e','#60a8f0','#e879f9','#fb7185','#34d399','#fbbf24','#a78bfa'];
 
-                    if (numericVotes.length > 1) {
-                        const voteSet = [...new Set(numericVotes)].sort((a, b) => a - b);
-                        const minVote = voteSet[0];
-                        const maxVote = voteSet[voteSet.length - 1];
-                        
-                        const points = [1, 2, 3, 5, 8, 13, 21];
-                        const minIndex = points.indexOf(minVote);
-                        const maxIndex = points.indexOf(maxVote);
+// ── State ───────────────────────────────────────────────────────────────────
+let ws, myId, myRoom, myVote = null;
+let state = { revealed: false, users: [] };
+let initialRevealDone = false; // confetti guard
 
-                        if (maxIndex > minIndex + 1) {
-                            const lowVoters = Object.values(room.users).filter(u => parseInt(u.vote) === minVote).map(u => u.username).join(', ');
-                            const highVoters = Object.values(room.users).filter(u => parseInt(u.vote) === maxVote).map(u => u.username).join(', ');
+// ── Theme ───────────────────────────────────────────────────────────────────
+function toggleTheme() {
+  const isLight = document.documentElement.dataset.theme === 'light';
+  document.documentElement.dataset.theme = isLight ? 'dark' : 'light';
+  document.getElementById('theme-lbl').textContent = isLight ? 'Dark' : 'Light';
+}
 
-                            document.getElementById('low-vote-value').innerText = minVote;
-                            document.getElementById('high-vote-value').innerText = maxVote;
-                            document.getElementById('low-player-list').innerText = lowVoters;
-                            document.getElementById('high-player-list').innerText = highVoters;
+// ── Lobby ───────────────────────────────────────────────────────────────────
+document.getElementById('inp-name').addEventListener('keydown', e => e.key === 'Enter' && document.getElementById('inp-room').focus());
+document.getElementById('inp-room').addEventListener('keydown', e => e.key === 'Enter' && joinRoom());
 
-                            const versusOverlay = document.getElementById('versus-overlay');
-                            versusOverlay.style.display = 'flex';
-                            setTimeout(() => {
-                                versusOverlay.style.display = 'none';
-                            }, 5000);
-                        }
-                    }
-                }
-            }
-        });
-    </script>
+// Auto-fill room code from ?roomCode= URL param
+const _urlRoom = new URLSearchParams(location.search).get('roomCode');
+if (_urlRoom) {
+  document.getElementById('inp-room').value = _urlRoom.toUpperCase();
+  document.getElementById('inp-name').focus();
+}
+
+function joinRoom() {
+  const name = document.getElementById('inp-name').value.trim();
+  const room = document.getElementById('inp-room').value.trim().toUpperCase() || null;
+  if (!name) { toast('Enter your name first'); document.getElementById('inp-name').focus(); return; }
+  connect(name, room);
+}
+
+// ── WebSocket ───────────────────────────────────────────────────────────────
+function connect(name, roomId) {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  ws = new WebSocket(`${proto}://${location.host}`);
+
+  ws.onopen = () => ws.send(JSON.stringify({ type: 'join', payload: { name, roomId } }));
+  ws.onmessage = e => handle(JSON.parse(e.data));
+  ws.onclose   = () => { toast('Disconnected'); log('<span class="log-red">Connection lost</span>'); };
+  ws.onerror   = () => toast('Connection error');
+}
+
+function send(type, payload = {}) {
+  if (ws?.readyState === 1) ws.send(JSON.stringify({ type, payload }));
+}
+
+// ── Message handler ─────────────────────────────────────────────────────────
+function handle({ type, payload }) {
+  switch (type) {
+
+    case 'welcome':
+      myId   = payload.userId;
+      myRoom = payload.roomId;
+      state  = payload.state;
+      document.getElementById('disp-room').textContent = myRoom;
+      document.getElementById('lobby').style.display = 'none';
+      document.getElementById('app').style.display   = 'flex';
+      buildCards();
+      render();
+      log(`Joined room <span class="log-accent">${myRoom}</span>`);
+      break;
+
+    case 'user_joined':
+      state = payload.state;
+      render();
+      log(`<b>${esc(nameOf(payload.userId, payload.name))}</b> joined`);
+      break;
+
+    case 'user_left':
+      state = payload.state;
+      render();
+      log(`<b>${esc(payload.name)}</b> <span class="log-red">left</span>`);
+      break;
+
+    case 'vote_cast':
+      state = payload.state;
+      render();
+      if (payload.userId !== myId)
+        log(`<b>${esc(nameOf(payload.userId))}</b> picked a card`);
+      break;
+
+    case 'vote_updated':
+      state = payload.state;
+      render();
+      if (state.revealed) {
+        evalConsensus(false); // never confetti on post-reveal changes
+        flashPlayer(payload.userId);
+      }
+      if (payload.userId !== myId)
+        log(`<b>${esc(nameOf(payload.userId))}</b> changed vote`);
+      break;
+
+    case 'revealed':
+      state = payload.state;
+      initialRevealDone = false; // about to do the reveal for real
+      render();
+      evalConsensus(true); // allow confetti only here
+      initialRevealDone = true;
+      log(`Cards <span class="log-green">revealed</span>`);
+      break;
+
+    case 'cleared':
+      state    = payload.state;
+      myVote   = null;
+      initialRevealDone = false;
+      render();
+      hideBanners();
+      log(`<span class="log-accent">New round</span> started`);
+      break;
+  }
+}
+
+// ── Build cards ─────────────────────────────────────────────────────────────
+function buildCards() {
+  const grid = document.getElementById('cards-grid');
+  grid.innerHTML = '';
+  FIB.forEach(val => {
+    const wrap = document.createElement('div');
+    wrap.className = 'card-wrap';
+
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.dataset.val = val;
+    card.innerHTML = `
+      <div class="card-face card-front">${val}</div>
+      <div class="card-face card-back"></div>
+    `;
+    card.onclick = () => castVote(val, card);
+    wrap.appendChild(card);
+    grid.appendChild(wrap);
+  });
+}
+
+// ── Render ───────────────────────────────────────────────────────────────────
+function render() {
+  renderPlayers();
+  renderCards();
+  renderVoteCount();
+  const votedCount = state.users.filter(u => u.hasVote).length;
+  document.getElementById('btn-reveal').disabled = state.revealed || votedCount < 2;
+}
+
+function renderPlayers() {
+  const list = document.getElementById('player-list');
+  const existing = {};
+  list.querySelectorAll('.player-row').forEach(el => existing[el.dataset.uid] = el);
+
+  const ids = new Set(state.users.map(u => u.id));
+  Object.keys(existing).forEach(id => { if (!ids.has(id)) existing[id].remove(); });
+
+  state.users.forEach((user, i) => {
+    let row = existing[user.id];
+    const color    = COLORS[i % COLORS.length];
+    const initials = user.name.slice(0, 2).toUpperCase();
+
+    if (!row) {
+      row = document.createElement('div');
+      row.className = 'player-row';
+      row.dataset.uid = user.id;
+      row.innerHTML = `
+        <div class="player-avatar" style="background:${color}">${initials}</div>
+        <span class="player-name">${esc(user.name)}${user.id === myId ? '<span class="you-tag">you</span>' : ''}</span>
+        <div class="player-status"></div>
+      `;
+      list.appendChild(row);
+    }
+
+    const st = row.querySelector('.player-status');
+    if (state.revealed && user.vote !== null) {
+      st.innerHTML = `<span class="status-val">${esc(String(user.vote))}</span>`;
+    } else if (user.hasVote) {
+      st.innerHTML = `<svg class="status-voted" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20,6 9,17 4,12"/></svg>`;
+    } else {
+      st.innerHTML = `<svg class="status-pending" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/></svg>`;
+    }
+  });
+
+  document.getElementById('pc-label').textContent = state.users.length;
+}
+
+function renderCards() {
+  document.querySelectorAll('.card').forEach(card => {
+    card.classList.toggle('selected', String(card.dataset.val) === String(myVote));
+  });
+}
+
+function renderVoteCount() {
+  const voted = state.users.filter(u => u.hasVote).length;
+  const total = state.users.length;
+  const lbl   = document.getElementById('vote-count-lbl');
+  lbl.innerHTML = voted === total && total > 0
+    ? `<span style="color:var(--green)">${voted}/${total} voted</span>`
+    : `<span>${voted}</span>/<span>${total}</span> voted`;
+}
+
+// ── Consensus logic ──────────────────────────────────────────────────────────
+function evalConsensus(allowConfetti = false) {
+  const votes    = state.users.map(u => u.vote).filter(v => v !== null);
+  const numVotes = votes.filter(v => v !== '?' && v !== '∞').map(Number);
+
+  if (numVotes.length < 2) { hideBanners(); return; }
+
+  const idxOf   = v => FIB_NUM.indexOf(v);
+  const indices = numVotes.map(idxOf).filter(i => i >= 0);
+  if (indices.length < 2) { hideBanners(); return; }
+
+  const minI = Math.min(...indices);
+  const maxI = Math.max(...indices);
+
+  if (maxI - minI <= 1) {
+    const unanimous = new Set(numVotes).size === 1;
+    showWin(FIB_NUM[maxI], numVotes, unanimous && allowConfetti);
+  } else {
+    // ❌ Needs discussion
+    showDiscuss(FIB_NUM[minI], FIB_NUM[maxI]);
+  }
+}
+
+function showWin(val, allNums, unanimous) {
+  document.getElementById('banner-discuss').style.display = 'none';
+  const banner = document.getElementById('banner-win');
+  banner.style.display = 'flex';
+  document.getElementById('win-num').textContent = val;
+
+  const unique = [...new Set(allNums)].sort((a,b) => a - b);
+  const detail = document.getElementById('win-detail');
+  if (unanimous) {
+    detail.innerHTML = `<span style="color:var(--green)">Unanimous!</span> Everyone voted <b>${unique[0]}</b>`;
+    launchConfetti();
+  } else {
+    detail.innerHTML = unique.length === 1
+      ? `All voted <b>${unique[0]}</b>`
+      : `Consensus between <b>${unique.join('</b> and <b>')}</b>`;
+  }
+}
+
+function showDiscuss(lowVal, highVal) {
+  document.getElementById('banner-win').style.display = 'none';
+  const banner = document.getElementById('banner-discuss');
+  banner.style.display = 'flex';
+
+  const lowUsers  = state.users.filter(u => u.vote !== null && Number(u.vote) === lowVal);
+  const highUsers = state.users.filter(u => u.vote !== null && Number(u.vote) === highVal);
+
+  document.getElementById('og-low').style.display  = lowUsers.length  ? 'flex' : 'none';
+  document.getElementById('og-high').style.display = highUsers.length ? 'flex' : 'none';
+  document.getElementById('discuss-arrow').style.display = (lowUsers.length && highUsers.length) ? '' : 'none';
+
+  document.getElementById('oc-low').innerHTML  = lowUsers.map(u =>
+    `<div class="ochip low"><span class="ochip-val">${esc(String(u.vote))}</span><span>${esc(u.name)}</span></div>`
+  ).join('');
+  document.getElementById('oc-high').innerHTML = highUsers.map(u =>
+    `<div class="ochip high"><span class="ochip-val">${esc(String(u.vote))}</span><span>${esc(u.name)}</span></div>`
+  ).join('');
+}
+
+function hideBanners() {
+  document.getElementById('banner-win').style.display     = 'none';
+  document.getElementById('banner-discuss').style.display = 'none';
+}
+
+// ── Flash a player row on post-reveal vote change ────────────────────────────
+function flashPlayer(userId) {
+  const row = document.querySelector(`.player-row[data-uid="${userId}"]`);
+  if (!row) return;
+
+  // Remove any existing flash so re-triggering works
+  row.classList.remove('flashing');
+  void row.offsetWidth; // reflow to restart animation
+
+  // Remove any stale badge
+  row.querySelector('.edited-badge')?.remove();
+
+  // Add shake flash
+  row.classList.add('flashing');
+  row.addEventListener('animationend', () => row.classList.remove('flashing'), { once: true });
+
+  // Insert amber "edited" badge after the name, before the status
+  const badge = document.createElement('span');
+  badge.className = 'edited-badge';
+  badge.textContent = 'edited';
+  const status = row.querySelector('.player-status');
+  row.insertBefore(badge, status);
+
+  // Remove badge after animation completes (2s)
+  setTimeout(() => badge.remove(), 2100);
+}
+
+// ── Actions ──────────────────────────────────────────────────────────────────
+function castVote(val) {
+  myVote = val;
+  renderCards();
+  send('vote', { vote: val });
+  log(`You voted <span class="log-accent">${val}</span>`);
+}
+
+function reveal()   { send('reveal'); }
+function newRound() { send('clear'); }
+
+function copyRoom() {
+  const url = `${location.origin}${location.pathname}?roomCode=${myRoom}`;
+  navigator.clipboard.writeText(url)
+    .then(() => toast(`Room link copied`));
+}
+
+// ── Activity log ─────────────────────────────────────────────────────────────
+function log(html) {
+  const list = document.getElementById('log-list');
+  // Remove placeholder
+  const placeholder = list.querySelector('.log-item:only-child');
+  if (placeholder && placeholder.querySelector('.log-time')?.textContent === '—') placeholder.remove();
+
+  const now  = new Date();
+  const time = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
+  const item = document.createElement('div');
+  item.className = 'log-item';
+  item.innerHTML = `<span class="log-time">${time}</span><span class="log-text">${html}</span>`;
+  list.insertBefore(item, list.firstChild);
+}
+
+// ── Toast ────────────────────────────────────────────────────────────────────
+function toast(msg) {
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  document.getElementById('toasts').appendChild(t);
+  setTimeout(() => t.remove(), 3000);
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function nameOf(uid, fallback = uid) {
+  return state.users.find(u => u.id === uid)?.name ?? fallback;
+}
+
+// ── Confetti ─────────────────────────────────────────────────────────────────
+(function() {
+  const canvas  = document.getElementById('confetti-canvas');
+  const ctx     = canvas.getContext('2d');
+  let particles = [];
+  let rafId     = null;
+  let fading    = false;
+  let globalAlpha = 1;
+
+  const COLORS_CONF = [
+    '#f0a04b','#3ecf8e','#60a8f0','#e879f9',
+    '#fb7185','#fbbf24','#a78bfa','#34d399','#f472b6'
+  ];
+
+  function resize() {
+    canvas.width  = window.innerWidth;
+    canvas.height = window.innerHeight;
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  function randomBetween(a, b) { return a + Math.random() * (b - a); }
+
+  function makeParticle() {
+    const angle  = randomBetween(-Math.PI * 0.9, -Math.PI * 0.1); // upward arc
+    const speed  = randomBetween(8, 22);
+    const size   = randomBetween(6, 13);
+    const isRect = Math.random() > 0.4;
+    return {
+      x:      randomBetween(canvas.width * .2, canvas.width * .8),
+      y:      canvas.height + 10,
+      vx:     Math.cos(angle) * speed,
+      vy:     Math.sin(angle) * speed,
+      rot:    randomBetween(0, Math.PI * 2),
+      rotV:   randomBetween(-0.18, 0.18),
+      color:  COLORS_CONF[Math.floor(Math.random() * COLORS_CONF.length)],
+      w:      isRect ? size * 1.6 : size,
+      h:      isRect ? size * 0.6 : size,
+      rect:   isRect,
+      gravity: randomBetween(0.25, 0.5),
+      drag:   randomBetween(0.97, 0.995),
+      wobble: randomBetween(0, Math.PI * 2),
+      wobbleV: randomBetween(0.05, 0.15),
+    };
+  }
+
+  function step() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.globalAlpha = globalAlpha;
+
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.x    += p.vx;
+      p.y    += p.vy;
+      p.vy   += p.gravity;
+      p.vx   *= p.drag;
+      p.vy   *= p.drag;
+      p.rot  += p.rotV;
+      p.wobble += p.wobbleV;
+
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot);
+      ctx.fillStyle = p.color;
+
+      if (p.rect) {
+        const scaleY = Math.cos(p.wobble);
+        ctx.scale(1, scaleY || 0.01);
+        ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+      } else {
+        ctx.beginPath();
+        ctx.arc(0, 0, p.w / 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.restore();
+
+      if (p.y > canvas.height + 40) particles.splice(i, 1);
+    }
+
+    if (fading) {
+      globalAlpha = Math.max(0, globalAlpha - 0.012);
+    }
+
+    if (particles.length > 0 || globalAlpha > 0) {
+      rafId = requestAnimationFrame(step);
+    } else {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.globalAlpha = 1;
+      rafId = null;
+    }
+  }
+
+  window.launchConfetti = function() {
+    if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+    particles    = [];
+    globalAlpha  = 1;
+    fading       = false;
+
+    // Burst in 3 waves
+    const burst = (count, delay) => setTimeout(() => {
+      for (let i = 0; i < count; i++) particles.push(makeParticle());
+    }, delay);
+
+    burst(80,   0);
+    burst(60, 180);
+    burst(50, 380);
+
+    // Start fading after 2.4s
+    setTimeout(() => { fading = true; }, 2400);
+
+    rafId = requestAnimationFrame(step);
+  };
+})();
+</script>
 </body>
 </html>

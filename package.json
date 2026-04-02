@@ -1,17 +1,17 @@
 {
   "name": "planning-poker",
-  "version": "1.2.0",
+  "version": "2.0.0",
   "description": "A simple scrum planning poker app",
   "license": "ISC",
   "author": "",
   "type": "commonjs",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node index.js"
   },
   "dependencies": {
     "canvas-confetti": "^1.9.4",
     "express": "^5.2.1",
-    "socket.io": "^4.8.3"
+    "ws": "^8.20.0"
   }
 }
